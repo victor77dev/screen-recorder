@@ -1,40 +1,45 @@
-let mediaRecorder, mixRecorder, screenRecorder, cameraRecorder, cameraStream;
-let shareStream;
+let mixRecorder, audioStream, screenStream, mixStream;
 let startTime, now;
 let muted = false;
 
 window.onload = () => {
-    console.log('loaded')
     const start = document.querySelector('#start');
-    start.onclick = (event) => {
-        startTime = Date.now();
-        shareStream = new MediaStream();
-        startAudioRecord();
-        startScreenRecord();
-    }
+    start.onclick = startCapture.bind(this);
 
     const stop = document.querySelector('#stop');
-    stop.onclick = (event) => {
-        mediaRecorder.stop();
-        // mixRecorder.stop();
-        cameraRecorder.stop();
-        // screenRecorder.stop();
-    }
+    stop.onclick = stopCapture.bind(this);
 
     const mute = document.querySelector('#mute');
-    mute.onclick = (event) => {
+    mute.onclick = () => {
         muted = !muted;
-        cameraStream.getAudioTracks()[0].applyConstraints(muted ? {audio: false} : constraints);
         mute.innerHTML = muted ? 'unmute' : 'mute';
     }
 }
 
+function startCapture() {
+    console.log('start Capture')
+    startTime = Date.now();
+    startAudioRecord();
+    startScreenRecord();
+}
+
+function stopCapture() {
+    console.log('stop Capture')
+    mixRecorder.stop();
+    screenStream.getTracks().forEach((track) => {
+        track.stop();
+    });
+    audioStream.getTracks().forEach((track) => {
+        track.stop();
+    });
+}
+
 function download(name, chunks, duration) {
-    var blob = new Blob(chunks, {
+    const blob = new Blob(chunks, {
         type: "video/webm"
     });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
     document.body.appendChild(a);
     a.style = "display: none";
     a.href = url;
@@ -52,98 +57,57 @@ function startAudioRecord() {
             echoCancellation: true,
             noiseSuppression: true,
         },
-        // video: {
-        //     width: { min: 1024, ideal: 1280, max: 1920 },
-        //     height: { min: 576, ideal: 720, max: 1080 },
-        // }
     }
     navigator.mediaDevices.getUserMedia(constraints)
-        .then(function(stream) {
-            /* use the stream */
-            // const video = document.querySelector('#camera');
-            // video.srcObject = stream;
-            // video.onloadedmetadata = function(e) {
-            //     video.play();
-            // };
-            cameraStream = stream;
-            // shareStream.addTrack(stream.getAudioTracks()[0]);
-            var cameraChunks = [];
-            var options = { mimeType: "video/webm; codecs=vp9" };
-            cameraRecorder = new MediaRecorder(stream, options);
-
-            setInterval(() => {
-                cameraRecorder.requestData();
-            }, 1800 * 1000);
-
-            // cameraRecorder.ondataavailable = cameraData;
-            // cameraRecorder.start();
-            // function cameraData(event) {
-            //     if (event.data.size > 0) {
-            //         console.log('downloading')
-            //         const duration = now - startTime;
-            //         cameraChunks.push(event.data);
-            //         download('camera', cameraChunks, duration);
-            //     } else {
-            //         // ...
-            //     }
-            // }
+        .then((stream) => {
+            audioStream = stream;
         })
-        .catch(function(err) {
-            /* handle the error */
+        .catch((err) => {
+            console.error(err);
         });
 }
 
 function startScreenRecord() {
-    var displayMediaOptions = {
+    const options = {
         video: {
-            // width: { min: 1024, ideal: 1280, max: 1920 },
-            // height: { min: 576, ideal: 720, max: 1080 },
-            width: { ideal: 1024 },
-            height: { ideal: 576 },
+            width: {ideal: 1280, max: 1920},
+            height: {ideal: 720, max: 1080},
         },
-        // video: true,
         audio: true,
     };
 
-    navigator.mediaDevices.getDisplayMedia(displayMediaOptions)
+    navigator.mediaDevices.getDisplayMedia(options)
     .then((stream) => {
-        shareStream.addTrack(stream.getVideoTracks()[0])
-        shareStream.addTrack(stream.getAudioTracks()[0])
-        cameraStream.getAudioTracks()[0]
+        screenStream = stream;
+        const mixChunks = [];
+        const options = {mimeType: 'video/webm; codecs=vp9'};
+
+        setInterval(() => {
+            console.log('request mix recorder')
+            mixRecorder.requestData();
+        }, 600000);
+
+        const audioCtx = new AudioContext();
+        const audioSource = audioCtx.createMediaStreamSource(audioStream);
+        const screenSource = audioCtx.createMediaStreamSource(stream);
+        const dest = audioCtx.createMediaStreamDestination();
+
+        screenSource.connect(dest);
+        audioSource.connect(dest);
+
+        mixStream = new MediaStream();
+        mixStream.addTrack(stream.getVideoTracks()[0]);
+        mixStream.addTrack(dest.stream.getAudioTracks()[0]);
+        mixRecorder = new MediaRecorder(mixStream, options);
+
+        mixRecorder.ondataavailable = mixData;
+        mixRecorder.start();
 
         const video = document.querySelector('#screen');
-        video.srcObject = shareStream;
+        video.srcObject = mixStream;
         video.onloadedmetadata = function(e) {
             video.play();
         };
-
-        var mixChunks = [];
-        var options = { mimeType: "video/webm; codecs=vp9" };
-        mixRecorder = new MediaRecorder(shareStream, options);
-
-
-        setInterval(() => {
-            mixRecorder.requestData();
-        }, 60000);
-
-        var audioCtx = new AudioContext();
-        // var source = audioCtx.createMediaStreamSource(cameraStream);
-        var shareCameraSource = audioCtx.createMediaStreamSource(cameraStream);
-        var source = audioCtx.createMediaStreamSource(shareStream);
-        var dest = audioCtx.createMediaStreamDestination();
-        source.connect(dest);
-        shareCameraSource.connect(dest);
-        mediaRecorder = new MediaRecorder(dest.stream, options);
-
-        setInterval(() => {
-            console.log('request media recorder')
-            mediaRecorder.requestData();
-        }, 6000);
-        mediaRecorder.ondataavailable = mixData;
-        mediaRecorder.start();
-
-        // mixRecorder.ondataavailable = mixData;
-        // mixRecorder.start();
 
         function mixData(event) {
             console.log('this is mix data', event)
@@ -157,37 +121,6 @@ function startScreenRecord() {
                 // ...
             }
         }
-
-        // var screenChunks = [];
-        // var options = { mimeType: "video/webm; codecs=vp9" };
-        // screenRecorder = new MediaRecorder(stream, options);
-
-        // screenRecorder.ondataavailable = screenData;
-        // screenRecorder.start();
-        // function screenData(event) {
-        //     if (event.data.size > 0) {
-        //         screenChunks.push(event.data);
-        //         download('screen', screenChunks);
-        //     } else {
-        //         // ...
-        //     }
-        // }
-
-        // var cameraChunks = [];
-        // var options = { mimeType: "video/webm; codecs=vp9" };
-        // cameraRecorder = new MediaRecorder(cameraStream, options);
-
-        // cameraRecorder.ondataavailable = cameraData;
-        // cameraRecorder.start();
-        // function cameraData(event) {
-        //     if (event.data.size > 0) {
-        //         cameraChunks.push(event.data);
-        //         download('camera', cameraChunks);
-        //     } else {
-        //         // ...
-        //     }
-        // }
-
     })
     .catch(err => { console.error("Error:" + err); return null; });
 

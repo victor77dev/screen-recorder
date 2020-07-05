@@ -85,7 +85,7 @@ function startScreenRecord() {
         setInterval(() => {
             console.log('request mix recorder')
             mixRecorder.requestData();
-        }, 600000);
+        }, 1800000);
 
         const audioCtx = new AudioContext();
         const audioSource = audioCtx.createMediaStreamSource(audioStream);

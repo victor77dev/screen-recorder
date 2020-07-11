@@ -1,4 +1,5 @@
 let mixRecorder, audioStream, screenStream, mixStream;
+let audioSource, dest;
 let startTime, now;
 let muted = false;
 
@@ -12,7 +13,14 @@ window.onload = () => {
     const mute = document.querySelector('#mute');
     mute.onclick = () => {
         muted = !muted;
+        if (!audioSource || !dest) return;
+
         mute.innerHTML = muted ? 'unmute' : 'mute';
+        if (muted) {
+            audioSource.disconnect(dest);
+        } else {
+            audioSource.connect(dest);
+        }
     }
 }
 
@@ -21,6 +29,7 @@ function startCapture() {
     startTime = Date.now();
     startAudioRecord();
     startScreenRecord();
+    document.querySelector('#mute').disabled = false;
 }
 
 function stopCapture() {
@@ -88,9 +97,9 @@ function startScreenRecord() {
         }, 1800000);
 
         const audioCtx = new AudioContext();
-        const audioSource = audioCtx.createMediaStreamSource(audioStream);
+        audioSource = audioCtx.createMediaStreamSource(audioStream);
         const screenSource = audioCtx.createMediaStreamSource(stream);
-        const dest = audioCtx.createMediaStreamDestination();
+        dest = audioCtx.createMediaStreamDestination();
 
         screenSource.connect(dest);
         audioSource.connect(dest);

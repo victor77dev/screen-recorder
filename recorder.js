@@ -70,8 +70,8 @@ function startAudioRecord() {
 function startScreenRecord() {
     const options = {
         video: {
-            width: {ideal: 1280, max: 1920},
-            height: {ideal: 720, max: 1080},
+            width: {ideal: 1280},
+            height: {ideal: 720},
         },
         audio: true,
     };
